@@ -35,6 +35,8 @@ import java.util.ArrayList;
 
 public class SamsungExynos4RIL extends RIL implements CommandsInterface {
 
+    private Message mPendingGetSimStatus;
+
     //SAMSUNG STATES
     static final int RIL_REQUEST_GET_CELL_BROADCAST_CONFIG = 10002;
 
@@ -122,7 +124,7 @@ public class SamsungExynos4RIL extends RIL implements CommandsInterface {
     private Object mCatProCmdBuffer;
 
     public SamsungExynos4RIL(Context context, int networkMode, int cdmaSubscription) {
-        super(context, networkMode, cdmaSubscription);
+        super(context, networkMode, cdmaSubscription, null);
     }
 
     public SamsungExynos4RIL(Context context, int networkMode, int cdmaSubscription, Integer instanceID) {
@@ -431,6 +433,26 @@ public class SamsungExynos4RIL extends RIL implements CommandsInterface {
             mCatProCmdRegistrant.notifyRegistrant(
                                 new AsyncResult (null, mCatProCmdBuffer, null));
             mCatProCmdBuffer = null;
+        }
+    }
+
+    @Override
+    public void
+    getIccCardStatus(Message result) {
+        if (mState != RadioState.RADIO_ON) {
+            mPendingGetSimStatus = result;
+        } else {
+            super.getIccCardStatus(result);
+        }
+    }
+
+    @Override
+    protected void
+    switchToRadioState(RadioState newState) {
+        super.switchToRadioState(newState);
+        if (newState == RadioState.RADIO_ON && mPendingGetSimStatus != null) {
+            super.getIccCardStatus(mPendingGetSimStatus);
+            mPendingGetSimStatus = null;
         }
     }
 

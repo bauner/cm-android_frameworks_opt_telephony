@@ -29,6 +29,7 @@ import android.provider.Settings.SettingNotFoundException;
 import android.telephony.Rlog;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
+import android.os.SystemProperties;
 
 import com.android.internal.telephony.cdma.CDMALTEPhone;
 import com.android.internal.telephony.cdma.CDMAPhone;
