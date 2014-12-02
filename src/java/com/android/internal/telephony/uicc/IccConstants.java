@@ -110,6 +110,6 @@ public interface IccConstants {
     //UICC access
     static final String DF_ADF = "7FFF";
 
-	//CM-Specific : Fake ICCID
-	static final String FAKE_ICCID = "00000000000001";
+    //CM-Specific : Fake ICCID
+    static final String FAKE_ICCID = "00000000000001";
 }
