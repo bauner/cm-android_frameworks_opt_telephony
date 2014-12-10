@@ -852,19 +852,15 @@ public class SIMRecords extends IccRecords {
             case EVENT_GET_ICCID_DONE:
                 isRecordLoadResponse = true;
 
-
                 ar = (AsyncResult)msg.obj;
                 data = (byte[])ar.result;
 
                 if (ar.exception != null) {
-                    if(mFh.needsFakeIccid()) {
-                        mIccId = FAKE_ICCID;
-                    } else {
-                        break;
-                    }
-                } else {
-                    mIccId = IccUtils.bcdToString(data, 0, data.length);
+                    break;
                 }
+
+                mIccId = IccUtils.bcdToString(data, 0, data.length);
+
                 log("iccid: " + mIccId);
 
             break;
