@@ -191,7 +191,7 @@ public final class MccTable {
                 locale = getLocaleFromMcc(context, mcc);
             }
             if (fromServiceState) {
-                setWifiCountryCodeFromMcc(context, mcc);
+           //     setWifiCountryCodeFromMcc(context, mcc);
             } else {
                 // from SIM
                 try {
@@ -219,7 +219,7 @@ public final class MccTable {
         } else {
             if (fromServiceState) {
                 // an empty mccmnc means no signal - tell wifi we don't know
-                setWifiCountryCodeFromMcc(context, 0);
+               // setWifiCountryCodeFromMcc(context, 0);
             }
         }
     }
@@ -405,13 +405,13 @@ public final class MccTable {
      * @param context Context to act on.
      * @param mcc Mobile Country Code of the operator.  0 if not known
      */
-    private static void setWifiCountryCodeFromMcc(Context context, int mcc) {
-        String country = MccTable.countryCodeForMcc(mcc);
-        Slog.d(LOG_TAG, "WIFI_COUNTRY_CODE set to " + country);
-        WifiManager wM = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+  //  private static void setWifiCountryCodeFromMcc(Context context, int mcc) {
+      //  String country = MccTable.countryCodeForMcc(mcc);
+     //   Slog.d(LOG_TAG, "WIFI_COUNTRY_CODE set to " + country);
+       // WifiManager wM = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
         //persist
-        wM.setCountryCode(country, true);
-    }
+    //    wM.setCountryCode(country, true);
+   // }
 
     static {
         sTable = new ArrayList<MccEntry>(240);

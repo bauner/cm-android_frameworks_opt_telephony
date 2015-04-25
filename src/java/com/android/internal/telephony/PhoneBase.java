@@ -1139,17 +1139,17 @@ public abstract class PhoneBase extends Handler implements Phone {
                 final String country = l.getCountry();
                 MccTable.setSystemLocale(mContext, l.getLanguage(), country);
 
-                if (!country.isEmpty()) {
-                    try {
-                        Settings.Global.getInt(mContext.getContentResolver(),
-                                Settings.Global.WIFI_COUNTRY_CODE);
-                    } catch (Settings.SettingNotFoundException e) {
+            //    if (!country.isEmpty()) {
+                //    try {
+                  //      Settings.Global.getInt(mContext.getContentResolver(),
+                //                Settings.Global.WIFI_COUNTRY_CODE);
+                 //   } catch (Settings.SettingNotFoundException e) {
                         // note this is not persisting
-                        WifiManager wM = (WifiManager)
-                                mContext.getSystemService(Context.WIFI_SERVICE);
-                        wM.setCountryCode(country, false);
-                    }
-                }
+                    //    WifiManager wM = (WifiManager)
+                    //            mContext.getSystemService(Context.WIFI_SERVICE);
+                   //     wM.setCountryCode(country, false);
+                   // }
+               // }
                 return;
             }
         }
