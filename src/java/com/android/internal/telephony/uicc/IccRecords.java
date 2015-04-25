@@ -1,4 +1,7 @@
 /*
+ * Copyright (c) 2015, Linux Foundation. All rights reserved.
+ * Not a Contribution.
+ *
  * Copyright (C) 2006 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,10 +29,12 @@ import android.os.Message;
 import android.os.Registrant;
 import android.os.RegistrantList;
 
+import android.telephony.TelephonyManager;
 import com.android.internal.telephony.CommandsInterface;
 import com.android.internal.telephony.uicc.IccCardApplicationStatus.AppState;
 import com.android.internal.telephony.uicc.IccCardApplicationStatus.AppType;
 import com.android.internal.telephony.PhoneConstants;
+import com.android.internal.telephony.SubscriptionController;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
@@ -66,6 +71,8 @@ public abstract class IccRecords extends Handler implements IccConstants {
     protected String mIccId;
     protected String mMsisdn = null;  // My mobile number
     protected String mMsisdnTag = null;
+    protected String mNewMsisdn = null;
+    protected String mNewMsisdnTag = null;
     protected String mVoiceMailNum = null;
     protected String mVoiceMailTag = null;
     protected String mNewVoiceMailNum = null;
@@ -103,12 +110,15 @@ public abstract class IccRecords extends Handler implements IccConstants {
 
     public static final int EVENT_GET_ICC_RECORD_DONE = 100;
     public static final int EVENT_REFRESH = 31; // ICC refresh occurred
+    protected static final int EVENT_GET_SMS_RECORD_SIZE_DONE = 28;
     public static final int EVENT_REFRESH_OEM = 29;
     protected static final int EVENT_APP_READY = 1;
     private static final int EVENT_AKA_AUTHENTICATE_DONE          = 90;
 
     private boolean mOEMHookSimRefresh = false;
-    protected static final int EVENT_GET_SMS_RECORD_SIZE_DONE = 35;
+
+    public static final int DEFAULT_VOICE_MESSAGE_COUNT = -2;
+    public static final int UNKNOWN_VOICE_MESSAGE_COUNT = -1;
 
     @Override
     public String toString() {
@@ -127,7 +137,6 @@ public abstract class IccRecords extends Handler implements IccConstants {
                 + " adnCache=" + mAdnCache
                 + " recordsRequested=" + mRecordsRequested
                 + " iccid=" + mIccId
-                + " msisdn=" + mMsisdn
                 + " msisdnTag=" + mMsisdnTag
                 + " voiceMailNum=" + mVoiceMailNum
                 + " voiceMailTag=" + mVoiceMailTag
@@ -229,10 +238,27 @@ public abstract class IccRecords extends Handler implements IccConstants {
         Registrant r = new Registrant(h, what, obj);
         mRecordsLoadedRegistrants.add(r);
 
-        if (mRecordsToLoad == 0 && mRecordsRequested == true) {
+        // Do not notify the registrant if the records were loaded but the app state
+        // is not ready. Consider the case -Sub/sim is enabled, sim is ready for use and a client
+        // is registered for records loaded notification. At a later point, the subscription is
+        // disabled, due to which the client unregisters for the notification and the app state has
+        // moved to detected. When the sub is enabled again, the client would register for records
+        // loaded. At this point the cached values of the record load state is available(as the
+        // records were not disposed), but the app state has not moved to ready. If the client is
+        // notified of records loaded event in such a situation, the client would erroneously think
+        // that the sim is ready and all the records are available. The client should be
+        // notified once the app state has moved to ready and the records have been loaded after
+        // the sub has been successfully enabled.
+        // TODO: Dispose the records once the sub has been disabled instead of checking for
+        // the app state .
+        if (mRecordsToLoad == 0 && mRecordsRequested == true
+                && isAppStateReady()) {
             r.notifyRegistrant(new AsyncResult(null, null, null));
+        } else {
+            log("registerForRecordsLoaded, not notifying the registrant immediately");
         }
     }
+
     public void unregisterForRecordsLoaded(Handler h) {
         mRecordsLoadedRegistrants.remove(h);
     }
@@ -245,10 +271,25 @@ public abstract class IccRecords extends Handler implements IccConstants {
         Registrant r = new Registrant(h, what, obj);
         mImsiReadyRegistrants.add(r);
 
-        if (mImsi != null) {
+        // Do not notify the registrant if imsi is available but the app state
+        // is not ready. Consider the case - a client is registered for imsi ready
+        // notification. At a later point, the subscription is disabled, due to which the
+        // client unregisters for the notification and the app state has moved to detected.
+        // When the sub is enabled again, the client would register for imsi ready. At this point
+        // the cached imsi is available(as the records were not disposed), but the app state has
+        // not moved to ready. If the client is notified of imsi ready in such a situation,
+        // the client would erroneously think that the sim is ready and imsi is available for use.
+        // The client should be notified once the app state has moved to ready and the imsi has
+        // been read after the sub has been successfully enabled.
+        // TODO: Dispose the records once the sub has been disabled instead of checking for
+        // the app state.
+        if ((mImsi != null) && isAppStateReady()) {
             r.notifyRegistrant(new AsyncResult(null, null, null));
+        } else {
+            log("registerForImsiReady, not notifying the registrant immediately");
         }
     }
+
     public void unregisterForImsiReady(Handler h) {
         mImsiReadyRegistrants.remove(h);
     }
@@ -301,6 +342,16 @@ public abstract class IccRecords extends Handler implements IccConstants {
     public void setImsi(String imsi) {
         mImsi = imsi;
         mImsiReadyRegistrants.notifyRegistrants();
+    }
+
+    /**
+     * Get the Network Access ID (NAI) on a CSIM for CDMA like networks. Default is null if IMSI is
+     * not supported or unavailable.
+     *
+     * @return null if NAI is not yet ready or unavailable
+     */
+    public String getNAI() {
+        return null;
     }
 
     public String getMsisdnNumber() {
@@ -737,6 +788,12 @@ public abstract class IccRecords extends Handler implements IccConstants {
         return null;
     }
 
+    protected void setSystemProperty(String key, String val) {
+        TelephonyManager.getDefault().setTelephonyProperty(mParentApp.getPhoneId(), key, val);
+
+        log("[key, value]=" + key + ", " +  val);
+    }
+
     /**
      * Returns the response of the SIM application on the UICC to authentication
      * challenge/response algorithm. The data string and challenge response are
@@ -849,4 +906,11 @@ public abstract class IccRecords extends Handler implements IccConstants {
         return !mContext.getResources().getBoolean(
                 com.android.internal.R.bool.skip_radio_power_off_on_sim_refresh_reset);
     }
+
+    protected boolean isAppStateReady() {
+        AppState appState = mParentApp.getState();
+        if (DBG) log("isAppStateReady : appState = " + appState);
+        return (appState == AppState.APPSTATE_READY);
+    }
+
 }

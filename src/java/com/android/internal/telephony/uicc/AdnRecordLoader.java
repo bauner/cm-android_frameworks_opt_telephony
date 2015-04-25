@@ -24,6 +24,8 @@ import android.os.Looper;
 import android.os.Message;
 import android.telephony.Rlog;
 
+import com.android.internal.telephony.uicc.IccConstants;
+
 public class AdnRecordLoader extends Handler {
     final static String LOG_TAG = "AdnRecordLoader";
     final static boolean VDBG = false;
@@ -33,6 +35,7 @@ public class AdnRecordLoader extends Handler {
     private IccFileHandler mFh;
     int mEf;
     int mExtensionEF;
+    String mPath;
     int mPendingExtLoads;
     Message mUserResponse;
     String mPin2;
@@ -64,6 +67,14 @@ public class AdnRecordLoader extends Handler {
         mFh = fh;
     }
 
+    private String getEFPath(int efid) {
+        if (efid == IccConstants.EF_ADN) {
+            return IccConstants.MF_SIM + IccConstants.DF_TELECOM;
+        }
+
+        return null;
+    }
+
     /**
      * Resulting AdnRecord is placed in response.obj.result
      * or response.obj.exception is set
@@ -76,9 +87,17 @@ public class AdnRecordLoader extends Handler {
         mRecordNumber = recordNumber;
         mUserResponse = response;
 
-        mFh.loadEFLinearFixed(
+        if (ef == IccConstants.EF_ADN) {
+            mPath = getEFPath(ef);
+            mFh.loadEFLinearFixed(
+                        ef, getEFPath(ef), recordNumber,
+                        obtainMessage(EVENT_ADN_LOAD_DONE));
+        } else {
+            mPath = null;
+            mFh.loadEFLinearFixed(
                     ef, recordNumber,
                     obtainMessage(EVENT_ADN_LOAD_DONE));
+        }
 
     }
 
@@ -88,15 +107,61 @@ public class AdnRecordLoader extends Handler {
      * or response.obj.exception is set
      */
     public void
-    loadAllFromEF(int ef, int extensionEF,
+    loadAllFromEF(int ef, int extensionEF, String path,
                 Message response) {
         mEf = ef;
         mExtensionEF = extensionEF;
+        mPath = path;
         mUserResponse = response;
 
-        mFh.loadEFLinearFixedAll(
-                    ef,
-                    obtainMessage(EVENT_ADN_LOAD_ALL_DONE));
+        /* If we are loading from EF_ADN, specifically
+         * specify the path as well, since, on some cards,
+         * the fileid is not unique.
+         */
+        if (ef == IccConstants.EF_ADN) {
+            mPath = getEFPath(ef);
+        }
+
+        if (mPath != null) {
+            mFh.loadEFLinearFixedAll(
+                        ef, mPath,
+                        obtainMessage(EVENT_ADN_LOAD_ALL_DONE));
+        } else {
+            mFh.loadEFLinearFixedAll(
+                        ef,
+                        obtainMessage(EVENT_ADN_LOAD_ALL_DONE));
+        }
+    }
+
+    /**
+     * Write adn to a EF SIM record
+     * It will get the record size of EF record and compose hex adn array
+     * then write the hex array to EF record
+     *
+     * @param adn is set with alphaTag and phone number
+     * @param ef EF fileid
+     * @param extensionEF extension EF fileid
+     * @param ef EF path
+     * @param recordNumber 1-based record index
+     * @param pin2 for CHV2 operations, must be null if pin2 is not needed
+     * @param response will be sent to its handler when completed
+     */
+    public void
+    updateEF(AdnRecord adn, int ef, int extensionEF, String path, int recordNumber,
+            String pin2, Message response) {
+        mEf = ef;
+        mExtensionEF = extensionEF;
+        mPath = path;
+        mRecordNumber = recordNumber;
+        mUserResponse = response;
+        mPin2 = pin2;
+        if (path != null) {
+            mFh.getEFLinearRecordSize(ef, path,
+                    obtainMessage(EVENT_EF_LINEAR_RECORD_SIZE_DONE, adn));
+        } else {
+            mFh.getEFLinearRecordSize(ef,
+                    obtainMessage(EVENT_EF_LINEAR_RECORD_SIZE_DONE, adn));
+        }
 
     }
 
@@ -115,14 +180,11 @@ public class AdnRecordLoader extends Handler {
     public void
     updateEF(AdnRecord adn, int ef, int extensionEF, int recordNumber,
             String pin2, Message response) {
-        mEf = ef;
-        mExtensionEF = extensionEF;
-        mRecordNumber = recordNumber;
-        mUserResponse = response;
-        mPin2 = pin2;
-
-        mFh.getEFLinearRecordSize( ef,
-            obtainMessage(EVENT_EF_LINEAR_RECORD_SIZE_DONE, adn));
+        String path = null;
+        if (ef == IccConstants.EF_ADN) {
+            path = getEFPath(ef);
+        }
+        updateEF(adn, ef, extensionEF, path, recordNumber, pin2, response);
     }
 
     //***** Overridden from Handler
@@ -163,8 +225,13 @@ public class AdnRecordLoader extends Handler {
                                 ar.exception);
                     }
 
-                    mFh.updateEFLinearFixed(mEf, mRecordNumber,
-                            data, mPin2, obtainMessage(EVENT_UPDATE_RECORD_DONE));
+                    if (mPath != null) {
+                        mFh.updateEFLinearFixed(mEf, mPath, mRecordNumber,
+                                data, mPin2, obtainMessage(EVENT_UPDATE_RECORD_DONE));
+                    } else {
+                        mFh.updateEFLinearFixed(mEf, mRecordNumber,
+                                data, mPin2, obtainMessage(EVENT_UPDATE_RECORD_DONE));
+                    }
 
                     mPendingExtLoads = 1;
 
@@ -203,9 +270,15 @@ public class AdnRecordLoader extends Handler {
 
                         mPendingExtLoads = 1;
 
-                        mFh.loadEFLinearFixed(
-                            mExtensionEF, adn.mExtRecord,
-                            obtainMessage(EVENT_EXT_RECORD_LOAD_DONE, adn));
+                        if (mPath != null) {
+                            mFh.loadEFLinearFixed(
+                                mExtensionEF, mPath, adn.mExtRecord,
+                                obtainMessage(EVENT_EXT_RECORD_LOAD_DONE, adn));
+                        } else {
+                            mFh.loadEFLinearFixed(
+                                mExtensionEF, adn.mExtRecord,
+                                obtainMessage(EVENT_EXT_RECORD_LOAD_DONE, adn));
+                        }
                     }
                 break;
 
@@ -253,9 +326,15 @@ public class AdnRecordLoader extends Handler {
 
                             mPendingExtLoads++;
 
-                            mFh.loadEFLinearFixed(
-                                mExtensionEF, adn.mExtRecord,
-                                obtainMessage(EVENT_EXT_RECORD_LOAD_DONE, adn));
+                            if (mPath != null) {
+                                mFh.loadEFLinearFixed(
+                                    mExtensionEF, mPath, adn.mExtRecord,
+                                    obtainMessage(EVENT_EXT_RECORD_LOAD_DONE, adn));
+                            } else {
+                                mFh.loadEFLinearFixed(
+                                    mExtensionEF, adn.mExtRecord,
+                                    obtainMessage(EVENT_EXT_RECORD_LOAD_DONE, adn));
+                            }
                         }
                     }
                 break;

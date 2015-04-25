@@ -291,6 +291,13 @@ public interface Phone {
     String[] getActiveApnTypes();
 
     /**
+     * Check if TETHER_DUN_APN setting or config_tether_apndata includes APN that matches
+     * current operator.
+     * @return true if there is a matching DUN APN.
+     */
+    boolean hasMatchedTetherApnSetting();
+
+    /**
      * Returns string for the active APN host.
      *  @return type as a string or null if none.
      */
@@ -1200,6 +1207,15 @@ public interface Phone {
                             Message response);
 
     /**
+     * Query the radio for the current network selection mode.
+     *
+     * Return values:
+     *     0 - automatic.
+     *     1 - manual.
+     */
+    void getNetworkSelectionMode(Message response);
+
+    /**
      *  Requests to set the preferred network type for searching and registering
      * (CS/PS domain, RAT, and operation mode)
      * @param networkType one of  NT_*_TYPE
@@ -1448,6 +1464,11 @@ public interface Phone {
     boolean isDataConnectivityPossible();
 
     /**
+     * Report on whether on-demand data connectivity is allowed.
+     */
+    boolean isOnDemandDataPossible(String apnType);
+
+    /**
      * Report on whether data connectivity is allowed for an APN.
      */
     boolean isDataConnectivityPossible(String apnType);
@@ -1518,6 +1539,11 @@ public interface Phone {
      * Retrieves IMEI for phones. Returns null if IMEI is not set.
      */
     String getImei();
+
+    /**
+     * Retrieves Nai for phones. Returns null if Nai is not set.
+     */
+    String getNai();
 
     /**
      * Retrieves the PhoneSubInfo of the Phone
@@ -1786,6 +1812,22 @@ public interface Phone {
     void unregisterForT53AudioControlInfo(Handler h);
 
     /**
+     * Register for radio off or not available
+     *
+     * @param h Handler that receives the notification message.
+     * @param what User-defined message code.
+     * @param obj User object.
+     */
+    public void registerForRadioOffOrNotAvailable(Handler h, int what, Object obj);
+
+    /**
+     * Unregisters for radio off or not available
+     *
+     * @param h Handler to be removed from the registrant list.
+     */
+    public void unregisterForRadioOffOrNotAvailable(Handler h);
+
+    /**
      * registers for exit emergency call back mode request response
      *
      * @param h Handler that receives the notification message.
@@ -1813,6 +1855,12 @@ public interface Phone {
     public int getLteOnCdmaMode();
 
     /**
+     * Return if the current radio is LTE on GSM
+     * @hide
+     */
+    public int getLteOnGsmMode();
+
+    /**
      * TODO: Adding a function for each property is not good.
      * A fucntion of type getPhoneProp(propType) where propType is an
      * enum of GSM+CDMA+LTE props would be a better approach.
@@ -1823,6 +1871,12 @@ public interface Phone {
      * false otherwise
      */
     boolean isCspPlmnEnabled();
+
+    /* Checks if manual network selection is allowed
+     * @return true if manual network selection is allowed
+     * @return false if manual network selection is not allowed
+     */
+    public boolean isManualNetSelAllowed();
 
     /**
      * Return an interface to retrieve the ISIM records for IMS, if available.
@@ -1917,7 +1971,7 @@ public interface Phone {
     /*
      * Returns the subscription id.
      */
-    public long getSubId();
+    public int getSubId();
 
     /*
      * Returns the phone id.
@@ -1966,6 +2020,13 @@ public interface Phone {
     public boolean setOperatorBrandOverride(String brand);
 
     /**
+     * Override the roaming indicator for the current ICCID.
+     */
+    public boolean setRoamingOverride(List<String> gsmRoamingList,
+            List<String> gsmNonRoamingList, List<String> cdmaRoamingList,
+            List<String> cdmaNonRoamingList);
+
+    /**
      * Is Radio Present on the device and is it accessible
      */
     public boolean isRadioAvailable();
@@ -1979,4 +2040,13 @@ public interface Phone {
      * @param lchStatus, true if call is in lch state
      */
     public void setLocalCallHold(int lchStatus);
+
+    public boolean isImsVtCallPresent();
+
+    /**
+     * Query the IMS Registration Status.
+     *
+     * @return true if IMS is Registered
+     */
+    public boolean isImsRegistered();
 }
